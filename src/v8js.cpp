@@ -4,6 +4,10 @@
 
 namespace HPHP
 {
+    const StaticString
+        s_V8Js("V8Js"),
+        s_V8_VERSION("V8_VERSION");
+
 	static void HHVM_METHOD(V8Js, __construct)
 	{
         v8::V8::InitializeICU();
@@ -14,14 +18,13 @@ namespace HPHP
 
     static Variant HHVM_METHOD(V8Js, executeString, const String& text)
     {
-        
         v8::Isolate* isolate = v8::Isolate::New();
         v8::Isolate::Scope isolate_scope(isolate);
 
         // Create a stack-allocated handle scope.
         v8::HandleScope handle_scope(isolate);
 
-        // Create a new context. JEB
+        // Create a new context.
         v8::Handle<v8::Context> context = v8::Context::New(isolate);
 
         // Enter the context for compiling and running the hello world script.
@@ -58,5 +61,9 @@ namespace HPHP
     void v8jsExtension::_initV8JsClass() {
         HHVM_ME(V8Js, __construct);
         HHVM_ME(V8Js, executeString);
+
+        Native::registerClassConstant<KindOfStaticString>(
+                s_V8Js.get(), s_V8_VERSION.get(), String::FromCStr(v8::V8::GetVersion()).get()
+        );
     }
 }
