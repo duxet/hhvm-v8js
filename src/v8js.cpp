@@ -1,6 +1,4 @@
 #include "ext_v8js.h"
-#include <v8.h>
-#include <libplatform/libplatform.h>
 
 namespace HPHP
 {
@@ -8,26 +6,47 @@ namespace HPHP
         s_V8Js("V8Js"),
         s_V8_VERSION("V8_VERSION");
 
+    Class *V8Js::s_class = nullptr;
+    const StaticString V8Js::s_className("V8Js");
+
+    Class *V8Js::getClass() {
+        if (s_class == nullptr) {
+            s_class = Unit::lookupClass(s_className.get());
+            assert(s_class);
+        }
+
+        return s_class;
+    }
+
+    V8Js::V8Js() : m_isolate(nullptr) {
+    }
+
+    V8Js::~V8Js() {
+        if (m_isolate) {
+            m_isolate->Dispose();
+        }
+    }
+
 	static void HHVM_METHOD(V8Js, __construct)
 	{
-        v8::V8::InitializeICU();
-        v8::Platform* platform = v8::platform::CreateDefaultPlatform();
-        v8::V8::InitializePlatform(platform);
-        v8::V8::Initialize();
+        auto *data = Native::data<V8Js>(this_);
+        data->m_isolate = v8::Isolate::New();
     }
 
     static Variant HHVM_METHOD(V8Js, executeString, const String& text)
     {
-        v8::Isolate* isolate = v8::Isolate::New();
+        auto *data = Native::data<V8Js>(this_);
+
+        v8::Isolate *isolate = data->m_isolate;
         v8::Isolate::Scope isolate_scope(isolate);
 
         // Create a stack-allocated handle scope.
         v8::HandleScope handle_scope(isolate);
 
         // Create a new context.
-        v8::Handle<v8::Context> context = v8::Context::New(isolate);
+        v8::Local<v8::Context> context = v8::Context::New(isolate);
 
-        // Enter the context for compiling and running the hello world script.
+        // Enter the context for compiling and running the script.
         v8::Context::Scope context_scope(context);
 
         // Create a string containing the JavaScript source code.
@@ -36,10 +55,20 @@ namespace HPHP
         // Compile the source code.
         v8::Local<v8::Script> script = v8::Script::Compile(source);
 
+        // Try to catch exceptions
+        v8::TryCatch trycatch(isolate);
+
         // Run it.
         v8::Local<v8::Value> result = script->Run();
 
-        if (result->IsString())
+        if (result.IsEmpty())
+        {
+            v8::Local<v8::Value> exception = trycatch.Exception();
+            v8::String::Utf8Value exception_str(exception);
+
+            throw Exception(std::string(*exception_str));
+        }
+        else if (result->IsString())
         {
             v8::String::Utf8Value strResult(result->ToString());
             return std::string(*strResult);
@@ -59,6 +88,11 @@ namespace HPHP
     }
 
     void v8jsExtension::_initV8JsClass() {
+        v8::V8::InitializeICU();
+        v8::Platform* platform = v8::platform::CreateDefaultPlatform();
+        v8::V8::InitializePlatform(platform);
+        v8::V8::Initialize();
+
         HHVM_ME(V8Js, __construct);
         HHVM_ME(V8Js, executeString);
 
