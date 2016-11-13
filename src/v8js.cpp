@@ -1,4 +1,5 @@
 #include "ext_v8js.h"
+#include "v8js_alloc.cpp"
 
 namespace HPHP
 {
@@ -85,6 +86,7 @@ namespace HPHP
         {
             return result->NumberValue();
         }
+        throw Exception(std::string("NoExecuteStringResultException"));
     }
 
     void v8jsExtension::_initV8JsClass() {
@@ -93,10 +95,12 @@ namespace HPHP
         v8::V8::InitializePlatform(platform);
         v8::V8::Initialize();
 
+        v8::V8::SetArrayBufferAllocator(new MallocArrayBufferAllocator);
+
         HHVM_ME(V8Js, __construct);
         HHVM_ME(V8Js, executeString);
 
-        Native::registerClassConstant<KindOfStaticString>(
+        Native::registerClassConstant<KindOfPersistentString>(
                 s_V8Js.get(), s_V8_VERSION.get(), String::FromCStr(v8::V8::GetVersion()).get()
         );
     }
